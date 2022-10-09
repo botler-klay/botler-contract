@@ -30,7 +30,7 @@ contract Registry is OwnableUpgradeable, ReentrancyGuardUpgradeable {
         address jobOwner;
     }
 
-    RegistryStatus registryStatus;
+    RegistryStatus public registryStatus;
 
     address[] public jobList;
     mapping(address => JobInfo) public jobInfo;
