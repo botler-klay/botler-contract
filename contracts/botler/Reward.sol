@@ -24,6 +24,10 @@ contract Reward is IReward, OwnableUpgradeable, ReentrancyGuardUpgradeable {
 
     mapping(address => UserInfo) public userInfo;
 
+    receive() external payable {
+
+    }
+
     function initialize(address _registryAddress, address _tokenAddress, bool _tokenLaunched, address _newOwner) external initializer {
         registryAddress = _registryAddress;
         tokenAddress = _tokenAddress;

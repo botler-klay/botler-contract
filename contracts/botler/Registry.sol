@@ -15,6 +15,7 @@ contract Registry is OwnableUpgradeable, ReentrancyGuardUpgradeable {
         uint256 executionFee;
         uint256 adminFee;
         uint256 accumulatedAdminFee;
+        uint256 jobListLength;
         address tokenAddress;
         address rewardContract;
     }
@@ -35,6 +36,7 @@ contract Registry is OwnableUpgradeable, ReentrancyGuardUpgradeable {
     address[] public jobList;
     mapping(address => JobInfo) public jobInfo;
     mapping(address => bool) public botlerPermission;
+    mapping(address => bool) public jobExist;
 
     event JobRegistered(address indexed user, address indexed job);
     event JobActivated(address indexed job);
@@ -48,6 +50,7 @@ contract Registry is OwnableUpgradeable, ReentrancyGuardUpgradeable {
     event JobBotlerFeeChanged(address indexed job, uint256 fee);
     event JobOwnerChanged(address indexed job, address indexed from, address indexed to);
     event AdminFeeWithdrawn(uint256 amount);
+    event RegistrySettingChanged(uint256 minimumBotlerFee, uint256 registrationFee, uint256 executionFee, uint256 adminFee, address tokenAddress, address rewardContract);
 
     function initialize(address _newOwner) external initializer {
         __Ownable_init();
@@ -57,8 +60,11 @@ contract Registry is OwnableUpgradeable, ReentrancyGuardUpgradeable {
     function registerJob(address _job, string memory _name, string memory _description, uint256 _botlerFee) external payable {
         require(_job != address(0));
         require(_botlerFee >= registryStatus.minimumBotlerFee);
+        require(jobExist[_job] == false);
+        jobExist[_job] = true;
 
         jobList.push(_job);
+        registryStatus.jobListLength = registryStatus.jobListLength + 1;
 
         JobInfo storage job = jobInfo[_job];
         job.active = true;
@@ -140,7 +146,9 @@ contract Registry is OwnableUpgradeable, ReentrancyGuardUpgradeable {
         job.accumulatedFee = job.accumulatedFee + job.botlerFee;
         uint256 usedKlay = klayLeft - gasleft();
         require(job.balance >= registryStatus.adminFee + usedKlay + job.botlerFee);
-        IReward(registryStatus.rewardContract).giveReward(msg.sender, usedKlay + job.botlerFee, 0);
+        IReward(registryStatus.rewardContract).giveReward(msg.sender, usedKlay + job.botlerFee, usedKlay + job.botlerFee);
+        IReward(registryStatus.rewardContract).giveReward(job.jobOwner, 0, usedKlay + job.botlerFee);
+        payable(registryStatus.rewardContract).call{value: (usedKlay + job.botlerFee)}("");
         registryStatus.accumulatedAdminFee = registryStatus.accumulatedAdminFee + registryStatus.adminFee;
         job.balance = job.balance - (registryStatus.adminFee + usedKlay + job.botlerFee);
     }
@@ -172,5 +180,16 @@ contract Registry is OwnableUpgradeable, ReentrancyGuardUpgradeable {
         registryStatus.accumulatedAdminFee = 0;
         payable(msg.sender).transfer(amount);
         emit AdminFeeWithdrawn(amount);
+    }
+
+    function changeRegistrySetting(uint256 _minimumBotlerFee, uint256 _registrationFee, uint256 _executionFee, uint256 _adminFee, address _tokenAddress, address _rewardContract) external onlyOwner nonReentrant {
+        registryStatus.minimumBotlerFee = _minimumBotlerFee;
+        registryStatus.registrationFee = _registrationFee;
+        registryStatus.executionFee = _executionFee;
+        registryStatus.adminFee = _adminFee;
+        registryStatus.tokenAddress = _tokenAddress;
+        registryStatus.rewardContract = _rewardContract;
+
+        emit RegistrySettingChanged(_minimumBotlerFee, _registrationFee, _executionFee, _adminFee, _tokenAddress, _rewardContract);
     }
 }
